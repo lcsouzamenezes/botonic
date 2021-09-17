@@ -6,7 +6,9 @@ export class NoMatchingRouteError extends Error {
   input: Input
   constructor(input: Input) {
     super(
-      `No route found for input '${String(input)}' and no 404 route defined`
+      `No route found for input '${JSON.stringify(
+        input
+      )}' and no 404 route defined`
     )
     this.input = input
   }
@@ -56,8 +58,6 @@ export class Router {
     const pathParams = this.getOnFinishParams(input)
     let brokenFlow = false
     const lastRoute = this.getRouteByPath(lastRoutePath, this.routes)
-    if (!lastRoute && input.path)
-      routeParams.route = this.getRouteByPath(input.path, this.routes)
     if (lastRoute && lastRoute.childRoutes && !routeParams.route)
       //get route depending of current ChildRoute
       routeParams = this.getRoute(
@@ -94,7 +94,6 @@ export class Router {
       let defaultAction
       if (routeParams.route) {
         if (
-          !routeParams.route.path &&
           routeParams.route.childRoutes &&
           routeParams.route.childRoutes.length
         ) {
@@ -135,13 +134,15 @@ export class Router {
               lastRoutePath: lastRoutePath,
             }
           }
-        } else if (defaultAction) {
+        }
+        if (defaultAction) {
           return {
             action: defaultAction.route.action,
             params: defaultAction.params,
             lastRoutePath: lastRoutePath,
           }
-        } else if ('redirect' in routeParams.route) {
+        }
+        if ('redirect' in routeParams.route) {
           lastRoutePath = routeParams.route.redirect
           const redirectRoute = this.getRouteByPath(lastRoutePath, this.routes)
           if (redirectRoute) {
@@ -217,7 +218,7 @@ export class Router {
     let params = {}
     const route = computedRoutes.find(r =>
       Object.entries(r)
-        .filter(([key, _]) => key != 'action' && key != 'childRoutes')
+        .filter(([key, _]) => key !== 'action' && key !== 'childRoutes')
         .some(([key, value]) => {
           const match = this.matchRoute(
             r,
@@ -256,7 +257,14 @@ export class Router {
             //evaluate childroute over next actions
             route = this.getRouteByPath(childPath.join('/'), r.childRoutes)
             if (route) return route
-          } else if (childPath.length === 0) return route //last action and found route
+          } else if (childPath.length === 0) {
+            const defaultActionRoute = r.childRoutes?.find(r => r.path === '')
+            if (!defaultActionRoute) return route //last action and found route
+            defaultActionRoute.childRoutes = r.childRoutes?.filter(
+              r => r.path !== ''
+            )
+            return defaultActionRoute
+          }
         }
       }
     }
